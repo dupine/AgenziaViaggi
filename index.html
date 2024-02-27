@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="main.css">
+
+    <!-- Load Leaflet from CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Load Esri Leaflet from CDN -->
+    <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+    <script src="https://unpkg.com/esri-leaflet-vector@4.2.3/dist/esri-leaflet-vector.js"></script>
+    
+    <!-- Load Esri Leaflet Geocoder from CDN -->
+    <script src="https://unpkg.com/esri-leaflet-geocoder@3.1.4/dist/esri-leaflet-geocoder.js"></script>
+
+    <script>
+        "use strict"
+        //const result = words.filter((word) => word.length > 6);
+        //Esri leafLet: https://developers.arcgis.com/esri-leaflet/geocode-and-search/reverse-geocode?
+        //APIs: https://developers.arcgis.com/api-keys/
+
+        let map;
+        let markerHotel, markerPartenza, markerArrivo;
+        let lineaVolo;
+        //const scuola = "localhost:8000";
+        const scuola = "10.1.0.52:8000";
+
+        var greenIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        var redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        var yellowIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        // ================== CERCA NAZIONI ====================
+        async function cercaNazione(citta, sel, span, marker){
+            let luogo = citta.value;
+            const risposta = await fetch(`http://${scuola}/cities?city=${luogo}`);
+            //const risposta = await fetch(`http://${scuola}0/cities?city=${luogo}`);
+            if(risposta.ok){
+                const dati = await risposta.json();
+                sel.innerHTML="";
+                dati.forEach((e) => sel.appendChild += `<option value='{"id":${e.id}, "lat":${e.coordinates.lat}, "lng":${e.coordinates.lng}}'>${e.country}</option>`);
+
+                // gestisci errore
+                const listSel = JSON.parse(sel.options[sel.selectedIndex].value);
+                span.innerText = listSel.id;
+                marker.setLatLng(new L.LatLng(listSel.lat, listSel.lng));
+                map.addLayer(marker);
+                if(map.hasLayer(lineaVolo)) map.removeLayer(lineaVolo);
+            } else {
+                console.log("errore: "+risposta.status);
+            }
+        }
+
+        // ================== INVIO PRENOTAZIONI HOTEL ====================
+        async function inviaPrenotazioneHotel(){
+            nominativoVolo.value = nominativo.value;
+            const risposta = await fetch(`http://${scuola}/reservations`, {
+                method: "POST",
+                body: JSON.stringify({
+                    cityId: cittaHotelId.innerText,
+                    name: nominativo.value,
+                    from: dataFrom.value,
+                    to: dataTo.value,
+                    guests: nGuests.value
+                }),
+                headers: {
+                    "Content-type": "application/json; charset=UTF-8"
+                }
+            });
+
+            if (risposta.ok) {
+                TFrispostaHotel.innerText = "Ok"
+                TFrispostaHotel.style.backgroundColor = "green";
+            } else {
+                TFrispostaHotel.innerText = "Error"
+                TFrispostaHotel.style.backgroundColor = "red";
+            }
+        }
+
+        // ================== INVIO PRENOTAZIONI VOLO ====================
+        async function inviaPrenotazioneVolo(){
+            const risposta = await fetch(`http://${scuola}/tickets`, {
+                method: "POST",
+                body: JSON.stringify({
+                    name: nominativoVolo.value,
+                    flightId: TFrispostaIdVolo.innerText,
+                    date: dataFrom.value
+                }),
+                headers: {
+                    "Content-type": "application/json; charset=UTF-8"
+                }
+            });
+            if (risposta.ok) {
+                TFrispostaVolo.innerText = "Ok";
+                TFrispostaVolo.style.backgroundColor = "green";
+                lineaVolo = L.polyline([markerPartenza.getLatLng(), markerArrivo.getLatLng()], {color: 'red'}).addTo(map);
+            } else {
+                TFrispostaVolo.innerText = "Error"
+                TFrispostaVolo.style.backgroundColor = "red";
+            }
+        }
+
+        // ================== CERCA ID DEL VOLO ====================
+        async function cercaIdVolo(){
+            const risposta = await fetch(`http://${scuola}/flights?from=${cittaVoloPartenzaId.innerText}&to=${cittaVoloArrivoId.innerText}`);
+            if(risposta.ok){
+                const dati = await risposta.json();
+                if(dati.length == 0) {
+                    TFrispostaIdVolo.innerText = "Volo inesistente";
+                    TFrispostaIdVolo.style.backgroundColor = "red";
+                } else {
+                    TFrispostaIdVolo.innerText = dati[0].id;
+                    TFrispostaIdVolo.style.backgroundColor = "yellow";
+                }
+            } else {
+                console.log("errore: "+risposta.status);
+            }
+        }
+
+        // ================== CERCA PRENOTAZIONI ====================
+        async function cercaPrenotazioni(){
+            let nome = nominativoPrenotazioni.value;
+            const rispostaRes = await fetch(`http://${scuola}/reservations?name=${nome}`);
+            const rispostaTic = await fetch(`http://${scuola}/tickets?name=${nome}`);
+
+            if(rispostaRes.ok){
+                const datiRes = await rispostaRes.json();
+                reservationList.innerHTML = "";
+                
+                datiRes.forEach(async (e) => {
+                    let sl = await(await fetch(`http://${scuola}/cities/${e.cityId}`) ).json();
+                    reservationList.appendChild(document.createElement("li")).innerText = `città: ${sl.city}, da: ${e.from}, a: ${e.to}, n. partecipanti: ${e.guests}`;
+                }); 
+            
+            } else console.log("errore: "+risposta.status);
+            
+            if(rispostaTic.ok){
+                const datiTic = await rispostaTic.json();
+                ticketsList.innerHTML = "";
+                
+                datiTic.forEach(async (e) => {
+                    let sl = await(await fetch(`http://${scuola}/flights/${e.flightId}`) ).json();
+                    ticketsList.appendChild(document.createElement("li")).innerText = `Id volo: ${e.flightId}, da: ${sl.from.city}, a: ${sl.to.city},  data: ${e.date}`
+                });
+
+            } else console.log("errore: "+risposta.status);
+        }
+
+        // ================== CAMBIO SELECT ====================
+        function change(spanId, sel, marker){   
+            const listSel = JSON.parse(sel.options[sel.selectedIndex].value);
+            spanId.innerText = listSel.id;
+            if(map.hasLayer(lineaVolo)) map.removeLayer(lineaVolo);
+            marker.setLatLng(new L.LatLng(listSel.lat, listSel.lng)); 
+        }
+
+        // ================== ON CLICK ====================
+        function onClick(e, apiKey) {
+            // altro modo: https://developer.mapquest.com/documentation/samples/leaflet/v2.2/geocoding/reverse/
+            if(map.hasLayer(lineaVolo)) map.removeLayer(lineaVolo);
+            if (!map.hasLayer(markerArrivo)) map.addLayer(markerArrivo);
+            
+            L.esri.Geocoding.reverseGeocode({ apikey: apiKey, language: "en" })
+                .latlng(e.latlng)
+                .language("en")
+                .run(async function (error, result) {
+                        if (error) return;
+                        markerArrivo.setLatLng(result.latlng);
+                        // coordinate arrotondate, const lngLatString = `${Math.round(result.latlng.lng * 100000) / 100000}, ${Math.round(result.latlng.lat * 100000) / 100000}`;                        
+
+                        markerArrivo.bindPopup(`<b> Arrivo </b><p>${result.address.Subregion}</p>`).openPopup();
+                        cittaVoloArrivo.value = result.address.Subregion;
+                        console.log(result);
+                        const risposta = await fetch(`http://${scuola}/cities?city=${result.Subregion}`);
+                        if(risposta.ok){
+                            const dati = await risposta.json();
+                            selVoloArrivo.innerHTML="";
+                            selVoloArrivo.appendChild(document.createElement("option")).innerText = result.address.CntryName;
+                            cittaVoloArrivoId.innerText = dati.find(e => ( Math.round(e.coordinates.lat * 1) == Math.round(result.latlng.lat * 1) && Math.round(e.coordinates.lng * 1) == Math.round(result.latlng.lng * 1) )).id;
+                        } else {
+                            console.log("errore: "+risposta.status);
+                        }
+                    }
+            );
+        }
+
+        // ================== INITIALIZE ====================
+        function initialize(){
+            map = L.map("map").setView([41.8931, 12.4828], 9);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            markerHotel = new L.marker([0, 0], {icon: greenIcon}).bindPopup("Hotel");
+            markerPartenza = new L.marker([0, 0], {icon: redIcon}).bindPopup("Partenza");
+            markerArrivo = new L.marker([0, 0], {icon: yellowIcon}).bindPopup("Arrivo");
+            lineaVolo = new L.polyline([[0,0], [0,0]], {color: 'red'});
+
+            // Esri API
+            const apiKey = "AAPKb5bfb9646fdb42a597c40bb245241f64JaDwt_m194uU5Uf5Qw2xzLubl7SKp-7t0aSXPlOHRV0nQ--RgAXg-CqNYY4uvgXw";
+            //'arcgis/streets' "arcgis/navigation" "arcgis/outdoor" "osm/standard"; prof
+
+            L.esri.Vector.vectorBasemapLayer('arcgis/streets', {
+                language: "en",
+                version: 2,
+                apikey: apiKey,
+            });//.addTo(map); // mappa inglese
+
+            var geocodeService = L.esri.Geocoding.geocodeService();
+                geocodeService.reverse().latlng([36.2933693, 7.9388789]).run(function (error, result) {
+                if (error) return;
+                L.marker(result.latlng).addTo(map).bindPopup(result.address.Match_addr).openPopup();
+            });
+
+            map.on('click', function(e) {
+                onClick(e, apiKey);
+            });
+        }
+        // https://community.esri.com/t5/arcgis-javascript-maps-sdk-questions/languages-and-transliterated-results-from/td-p/379660
+
+      </script>
+
+
+</head>
+<body onload="initialize()">
+
+    <section id="main">
+        <section id="prenotazioni">
+            <section id="prenotazioneHotel">
+                <h2>Prenotazione hotel</h2>
+                <div class="border">
+                    <label for="cittaHotel">Nome della città:</label>
+                    <p class="pFlex"><input id="cittaHotel"></input> <button onclick="cercaNazione(cittaHotel, selHotel, cittaHotelId, markerHotel)">Cerca</button></p>
+                    <label for="selHotel">Nazione</label> <select onchange="change(cittaHotelId, selHotel, markerHotel)" id="selHotel"></select>
+                    <p><label for="cittaId">ID della citta scelta: </label> <span id="cittaHotelId"></span></p>
+                </div>
+
+                </div>
+                    <label for="dataFrom">Data from: </label>
+                    <input type="date" id="dataFrom" name="date" required>
+                    <label for="dataTo">Data to: </label>
+                    <input type="date" id="dataTo" name="date" required>
+                </div>
+
+                <div  class="border">
+                    <label for="nominativo">Nome:</label>
+                    <input id="nominativo"></input>
+                    <label for="nGuests">Numero partecipanti</label>
+                    <input id="nGuests"></input>
+                </div>
+
+                <button onclick="inviaPrenotazioneHotel()">Prenota</button>
+                <p id="TFrispostaHotel"> </p>
+            </section>
+
+            <section id="prenotazioneVolo">
+                <h2>Prenotazione volo</h2>
+                <div class="border">
+                    <label for="cittaVoloPartenza">Città di partenza:</label>
+                    <p class="pFlex"><input id="cittaVoloPartenza"></input> <button onclick="cercaNazione(cittaVoloPartenza, selVoloPartenza, cittaVoloPartenzaId, markerPartenza)">Cerca</button></p>
+                    <label for="selVolo">Nazione</label> <select onchange="change(cittaVoloPartenzaId, selVoloPartenza, markerPartenza)" id="selVoloPartenza"></select>
+                    <p><label for="cittaVoloPartenzaId">ID della citta scelta: </label> <span id="cittaVoloPartenzaId"></span></p>
+                    
+                </div>
+                
+                <select onchange="change(cittaVoloArrivoId, selCittaArrivo, markerArrivo)"></select>
+
+                <div class="border">
+                    <label for="cittaVoloArrivo">Città di arrivo:</label>
+                    <p class="pFlex"><input id="cittaVoloArrivo"></input> <button onclick="cercaNazione(cittaVoloArrivo, selVoloArrivo, cittaVoloArrivoId, markerArrivo)">Cerca</button></p>
+                    <label for="selVolo">Nazione</label> <select onchange="change(cittaVoloArrivoId, selVoloArrivo, markerArrivo)" id="selVoloArrivo"></select>
+                    <p><label for="cittaVoloArrivoId">ID della citta scelta: </label> <span id="cittaVoloArrivoId"></span></p>
+                </div>
+
+                <div id="divCercaVolo">
+                    <button id="cercaVolo" onclick="cercaIdVolo()">Cerca volo</button>
+                    <label for="TFrispostaIdVolo">ID del volo: </label>
+                    <span id="TFrispostaIdVolo"></span>
+                </div>
+
+                </div>
+                    <label for="dataFrom">Data: </label>
+                    <input type="date" id="dataFrom" name="date" required>
+                </div>
+
+                <div>
+                    <label for="nominativoVolo">Nome e cognome:</label>
+                    <input id="nominativoVolo"></input>  
+                </div>
+                <button onclick="inviaPrenotazioneVolo()">Prenota</button>
+                <p id="TFrispostaVolo"> </p>
+            </section>
+        </section>
+
+        <section id="sezioneMappa">
+            <h2>Mappa del glorioso mondo</h2>
+            <div id="map" style="height: 800px;">
+            </div>
+        </section>
+
+    </section>
+    
+    <section style="width: 50%;">
+        <div class="border">
+            <label for="nominativoPrenotazioni">Cerca prenotazioni di:</label>
+            <p class="pFlex"><input id="nominativoPrenotazioni"></input> <button onclick="cercaPrenotazioni()">Cerca</button></p>
+            <label for="prenotazioniHotel">Prenotazioni hotel: </label>
+            <nav id="prenotazioniHotel">
+                <ul id="reservationList">
+                </ul>
+            </nav>
+
+            <label for="prenotazioniVolo">Prenotazioni voli: </label>
+            <nav id="prenotazioniVolo">
+                <ul id="ticketsList">
+                </ul>
+            </nav>
+            
+        </div>
+    </section>
+
+</body>
+</html>

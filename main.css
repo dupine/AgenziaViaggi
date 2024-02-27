@@ -1,0 +1,81 @@
+#main {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+}
+
+#prenotazioni {
+    display: flex;
+    flex: 1;
+    border-right: 1px solid #ccc;
+}
+
+#prenotazioneHotel,
+#prenotazioneVolo {
+    border: 2px solid black;
+    flex: 1;
+    padding: 20px;
+    border-bottom: 1px solid #ccc;
+}
+
+#sezioneMappa {
+    flex: 1;
+    height: 800px;
+    padding: 20px;
+}
+section div {
+    margin-bottom: 15px;
+}
+
+section label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+section input,
+section select {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+
+.pFlex {
+    display: flex;
+}
+.pFlex input{
+    margin-right: 10px;
+}
+.pFlex button{
+    margin-bottom: 10px;
+}
+
+p{
+    display: flex;
+}
+
+section button {
+    display: flex;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+button{
+    border-radius: 12px;   
+}
+
+#cercaVolo{
+    width: 100%;
+}
+
+.border *{
+    margin: 3px;
+}
+
+#divCercaVolo *{
+    padding: 10px;
+}
